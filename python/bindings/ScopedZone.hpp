@@ -95,7 +95,7 @@ class PyScopedZone {
   std::string m_source;
   uint32_t m_line;
 
-  tracy::ScopedZone* m_zone;
+  tracy::ScopedZone* m_zone = nullptr;
 };
 #else
 
