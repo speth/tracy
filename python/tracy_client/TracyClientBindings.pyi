@@ -2805,6 +2805,8 @@ class _ScopedZone():
     pass
 def _plot_config(name: str, type: int, step: bool, fill: bool, color: int) -> typing.Optional[int]:
     pass
+def _zoned_call(callable: typing.Callable[..., typing.Any], name: typing.Optional[str], color: int, depth: typing.Optional[int], active: bool, function: str, file: str, line: int) -> typing.Callable[..., typing.Any]:
+    pass
 @typing.overload
 def alloc(ptr: int, size: int, name: typing.Optional[str] = None, id: typing.Optional[int] = None, depth: typing.Optional[int] = None) -> typing.Optional[int]:
     pass

@@ -11,6 +11,14 @@ using namespace pybind11::literals;
 
 #include "tracy/Tracy.hpp"
 
+// Calls `callable(*args, **kwargs)`, raising any Python exception it raises.
+inline py::object CallPython(const py::object& callable, const py::args& args,
+                             const py::kwargs& kwargs) {
+  PyObject* result = PyObject_Call(callable.ptr(), args.ptr(), kwargs.ptr());
+  if (!result) throw py::error_already_set();
+  return py::reinterpret_steal<py::object>(result);
+}
+
 #ifdef TRACY_ENABLE
 template <typename Type = std::string>
 bool SetText(const Type& text, tracy::ScopedZone* zone) {
@@ -97,6 +105,37 @@ class PyScopedZone {
 
   tracy::ScopedZone* m_zone = nullptr;
 };
+
+// Wraps `callable` so that every call runs inside a zone of its own. The zone
+// lives on the C++ stack for exactly one call, so concurrent and recursive
+// calls each get an independent zone on their own thread, and the zone closes
+// whether the call returns or raises.
+//
+// The zone's source location is built once, here, and is never freed: the
+// profiler refers to it by address for the rest of the process, as it does to
+// the static source location of a C++ ZoneScoped.
+inline py::cpp_function ZonedCall(py::object callable,
+                                  const std::optional<std::string>& name,
+                                  uint32_t color, std::optional<int32_t> depth,
+                                  bool active, const std::string& function,
+                                  const std::string& source, uint32_t line) {
+  struct Site {
+    std::optional<std::string> name;
+    std::string function;
+    std::string source;
+    tracy::SourceLocationData location;
+    int32_t depth;
+    bool active;
+  };
+  auto* site = new Site{name, function, source, {}, depth ? *depth : -1, active};
+  site->location = {site->name ? site->name->c_str() : nullptr,
+                    site->function.c_str(), site->source.c_str(), line, color};
+  return py::cpp_function(
+      [site, callable](py::args args, py::kwargs kwargs) -> py::object {
+        tracy::ScopedZone zone(&site->location, site->depth, site->active);
+        return CallPython(callable, args, kwargs);
+      });
+}
 #else
 
 class PyScopedZone {
@@ -117,4 +156,15 @@ class PyScopedZone {
   void Enter() {}
   void Exit() {}
 };
+
+inline py::cpp_function ZonedCall(py::object callable,
+                                  const std::optional<std::string>&, uint32_t,
+                                  std::optional<int32_t>, bool,
+                                  const std::string&, const std::string&,
+                                  uint32_t) {
+  return py::cpp_function(
+      [callable](py::args args, py::kwargs kwargs) -> py::object {
+        return CallPython(callable, args, kwargs);
+      });
+}
 #endif

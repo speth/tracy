@@ -801,6 +801,10 @@ PYBIND11_MODULE(TracyClientBindings, m) {
       .def("enter", &PyScopedZone::Enter)
       .def("exit", &PyScopedZone::Exit);
 
+  m.def("_zoned_call", &ZonedCall, "callable"_a.none(false), "name"_a,
+        "color"_a.none(false), "depth"_a, "active"_a.none(false),
+        "function"_a.none(false), "file"_a.none(false), "line"_a.none(false));
+
   m.def("alloc", &MemoryAllocate<>, "ptr"_a.none(false), "size"_a.none(false),
         "name"_a = static_cast<OptionalString>(std::nullopt),
         "id"_a = static_cast<OptionalNumber>(std::nullopt),

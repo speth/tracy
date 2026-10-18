@@ -8,6 +8,7 @@ from typing import Callable, Optional, Union
 from tracy_client.TracyClientBindings import (
     is_enabled,
     _ScopedZone,
+    _zoned_call,
     ColorType,
     frame_mark_start,
     frame_mark_end,
@@ -63,7 +64,12 @@ def ScopedZoneDecorator(
         if class_name is not None:
             source = f"{class_name}:{source}"
 
-        zone = _ScopedZone(
+        # Each call gets its own native zone, opened and closed around the
+        # call; sharing one zone object between calls would let concurrent or
+        # recursive calls overwrite each other's zone. `wrapped` stays a Python
+        # function so that @wraps applies and it still binds as a method.
+        call = _zoned_call(
+            function,
             name,
             int(color),
             depth,
@@ -75,10 +81,7 @@ def ScopedZoneDecorator(
 
         @wraps(function)
         def wrapped(*args, **kwargs):
-            zone.enter()
-            value = function(*args, **kwargs)
-            zone.exit()
-            return value
+            return call(*args, **kwargs)
 
         return wrapped
 
